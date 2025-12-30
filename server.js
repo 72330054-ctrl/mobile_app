@@ -62,6 +62,47 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Get friends of a specific user
+app.get('/friends/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    // Fetch friendships where the user is user1 or user2
+    const { data, error } = await supabase
+      .from('friendships')
+      .select(`
+        user1_id,
+        user2_id,
+        users1:users!user1_id(id, username, profile_image),
+        users2:users!user2_id(id, username, profile_image)
+      `)
+      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    // Map to get the friend info (excluding self)
+    const friends = data.map(f => {
+      if (f.user1_id === userId) {
+        return {
+          id: f.users2.id,
+          username: f.users2.username,
+          profile_image: f.users2.profile_image
+        };
+      } else {
+        return {
+          id: f.users1.id,
+          username: f.users1.username,
+          profile_image: f.users1.profile_image
+        };
+      }
+    });
+
+    res.json({ friends });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 app.listen(process.env.PORT || 3000, () => console.log(`Server running on port ${process.env.PORT || 3000}`));
