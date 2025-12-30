@@ -18,18 +18,46 @@ app.get('/', (req, res) => {
   res.send('Backend is running');
 });
 
-// Login (check users table)
+// Login or signup
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
   try {
-    const { data, error } = await supabase
+    // Check if user exists
+    const { data: existingUser, error: selectError } = await supabase
       .from('users')
       .select('*')
       .eq('username', username)
-      .eq('password', password)
-      .single(); // get one user
-    if (error || !data) return res.status(400).json({ error: 'Invalid username or password' });
-    res.json({ message: 'Login successful', user: data });
+      .single();
+
+    if (selectError && selectError.code !== 'PGRST116') {
+      // Unexpected error
+      return res.status(500).json({ error: selectError.message });
+    }
+
+    if (existingUser) {
+      // User exists, check password
+      if (existingUser.password !== password) {
+        return res.status(400).json({ error: 'Invalid password' });
+      }
+      return res.json({ message: 'Login successful', user: existingUser });
+    }
+
+    // User doesn't exist → create new user (signup)
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert([{ username, password }])
+      .select()
+      .single();
+
+    if (insertError) return res.status(500).json({ error: insertError.message });
+
+    res.json({ message: 'User created successfully', user: newUser });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
