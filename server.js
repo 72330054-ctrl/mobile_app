@@ -71,7 +71,7 @@ app.get('/friends/:userId', async (req, res) => {
     const { data, error } = await supabase
       .from('friendships')
       .select(`
-        id,        -- friendship id
+        id,                     -- friendship id
         user1_id,
         user2_id,
         users1:users!user1_id(id, username, profile_image),
@@ -85,14 +85,14 @@ app.get('/friends/:userId', async (req, res) => {
     const friends = data.map(f => {
       if (f.user1_id === userId) {
         return {
-          friendship_id: f.id,          // <- friendship id
+          friendship_id: f.id,       // friendship id
           id: f.users2.id,
           username: f.users2.username,
           profile_image: f.users2.profile_image
         };
       } else {
         return {
-          friendship_id: f.id,          // <- friendship id
+          friendship_id: f.id,       // friendship id
           id: f.users1.id,
           username: f.users1.username,
           profile_image: f.users1.profile_image
