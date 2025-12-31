@@ -106,6 +106,31 @@ app.get('/friends/:userId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Get shared images for a specific friendship
+app.get('/shared-images/:friendshipId', async (req, res) => {
+  const { friendshipId } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('shared_images')
+      .select(`
+        id,
+        friendship_id,
+        sender_id,
+        image_url,
+        created_at
+      `)
+      .eq('friendship_id', friendshipId)
+      .order('created_at', { ascending: true });
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ images: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Start server
 app.listen(process.env.PORT || 3000, () =>
