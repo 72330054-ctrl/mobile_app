@@ -15,7 +15,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-const upload = multer({ dest: 'uploads/' });
 
 
 // ------------------------
@@ -286,56 +285,57 @@ app.listen(process.env.PORT || 3000, () =>
 );
 // ------------------------
 // Upload shared image
-app.post(
-  '/shared-images/upload',
-  upload.single('image'),
-  async (req, res) => {
-    try {
-      const { friendshipId, senderId } = req.body;
-      const file = req.file;
+const upload = multer({ dest: 'uploads/' });
 
-      if (!file || !friendshipId || !senderId) {
-        return res.status(400).json({ error: 'Missing data' });
-      }
+app.post('/upload-image', upload.single('image'), async (req, res) => {
+  try {
+    const { friendshipId, senderId } = req.body;
+    const file = req.file;
 
-      const fileExt = file.originalname.split('.').pop();
-      const fileName = `${friendshipId}/${Date.now()}.${fileExt}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(fileName, fs.readFileSync(file.path), {
-          contentType: file.mimetype,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: publicUrl } = supabase.storage
-        .from('images')
-        .getPublicUrl(fileName);
-
-      // Insert into table
-      const { error: insertError } = await supabase
-        .from('shared_images')
-        .insert({
-          friendship_id: friendshipId,
-          sender_id: senderId,
-          image_url: publicUrl.publicUrl,
-        });
-
-      if (insertError) throw insertError;
-
-      // Remove temp file
-      fs.unlinkSync(file.path);
-
-      res.json({
-        message: 'Image uploaded successfully',
-        imageUrl: publicUrl.publicUrl,
-      });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+    if (!file) {
+      return res.status(400).json({ error: 'No image received' });
     }
+
+    const fileBuffer = fs.readFileSync(file.path);
+
+    const fileName = `shared/${Date.now()}_${file.originalname}`;
+
+    
+    const { error: uploadError } = await supabase.storage
+      .from('images') // YOUR BUCKET NAME
+      .upload(fileName, fileBuffer, {
+        contentType: file.mimetype,
+      });
+
+    if (uploadError) {
+      return res.status(400).json({ error: uploadError.message });
+    }
+
+    // 3️⃣ Get public URL
+    const { data } = supabase.storage
+      .from('images')
+      .getPublicUrl(fileName);
+
+    const imageUrl = data.publicUrl;
+
+   
+    const { error: dbError } = await supabase
+      .from('shared_images')
+      .insert({
+        friendship_id: friendshipId,
+        sender_id: senderId,
+        image_url: imageUrl,
+      });
+
+    if (dbError) {
+      return res.status(400).json({ error: dbError.message });
+    }
+
+   
+    fs.unlinkSync(file.path);
+
+    res.json({ message: 'Image uploaded', imageUrl });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-);
