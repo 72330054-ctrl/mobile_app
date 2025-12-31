@@ -225,44 +225,50 @@ app.post('/requests/:id/accept', async (req, res) => {
   const { id } = req.params;
 
   try {
-    // 1️⃣ Update request status
-    const { data: request, error } = await supabase
-      .from('friend_requests')
-      .update({ status: 'accepted' })
-      .eq('id', id)
-      .select()
-      .single();
+    // Get the friend request
+    const { data: request, error: getError } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (getError || !request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
 
-    // 2️⃣ Create friendship
+    // Create friendship
     await supabase.from('friendships').insert({
       user1_id: request.sender_id,
-      user2_id: request.receiver_id
+      user2_id: request.receiver_id,
     });
 
-    res.json({ message: 'Friend request accepted', request });
+    // Delete the request
+    await supabase.from('friend_requests').delete().eq('id', id);
+
+    res.json({ message: 'Friend request accepted and removed' });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ------------------------
 // Reject friend request
 app.post('/requests/:id/reject', async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Delete the request
     const { data, error } = await supabase
-      .from('friend_requests')
-      .update({ status: 'rejected' })
-      .eq('id', id)
-      .select()
-      .single();
+        .from('friend_requests')
+        .delete()
+        .eq('id', id)
+        .select()
+        .single();
 
     if (error) return res.status(400).json({ error: error.message });
 
-    res.json({ message: 'Friend request rejected', request: data });
+    res.json({ message: 'Friend request rejected and removed' });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
