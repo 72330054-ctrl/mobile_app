@@ -13,11 +13,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// ------------------------
 // Test route
 app.get('/', (req, res) => {
   res.send('Backend is running');
 });
 
+// ------------------------
 // Login or signup
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -27,7 +29,6 @@ app.post('/login', async (req, res) => {
   }
 
   try {
-    // Check if user exists
     const { data: existingUser, error: selectError } = await supabase
       .from('users')
       .select('*')
@@ -39,14 +40,12 @@ app.post('/login', async (req, res) => {
     }
 
     if (existingUser) {
-      // User exists, check password
       if (existingUser.password !== password) {
         return res.status(400).json({ error: 'Invalid password' });
       }
       return res.json({ message: 'Login successful', user: existingUser });
     }
 
-    // User doesn't exist → create new user (signup)
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert([{ username, password }])
@@ -62,12 +61,12 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
+// ------------------------
+// Get friends
 app.get('/friends/:userId', async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // Fetch friendships where the user is user1 or user2
     const { data, error } = await supabase
       .from('friendships')
       .select(`
@@ -81,7 +80,6 @@ app.get('/friends/:userId', async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
-    // Map to get the friend info (excluding self)
     const friends = data.map(f => {
       if (f.user1_id === userId) {
         return {
@@ -106,7 +104,9 @@ app.get('/friends/:userId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Get shared images for a specific friendship
+
+// ------------------------
+// Get shared images
 app.get('/shared-images/:friendshipId', async (req, res) => {
   const { friendshipId } = req.params;
 
@@ -130,12 +130,13 @@ app.get('/shared-images/:friendshipId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ------------------------
 // Add friend by code
 app.post('/add-friend', async (req, res) => {
   const { senderId, friendCode } = req.body;
 
   try {
-    // 1️⃣ Find user by code
     const { data: receiver, error: userError } = await supabase
       .from('users')
       .select('id')
@@ -146,12 +147,10 @@ app.post('/add-friend', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Prevent self request
     if (receiver.id === senderId) {
       return res.status(400).json({ error: 'You cannot add yourself' });
     }
 
-    // 2️⃣ Check if already friends
     const { data: existingFriendship } = await supabase
       .from('friendships')
       .select('id')
@@ -165,7 +164,6 @@ app.post('/add-friend', async (req, res) => {
       return res.status(400).json({ error: 'Already friends' });
     }
 
-    // 3️⃣ Create friend request
     const { error: requestError } = await supabase
       .from('friend_requests')
       .insert({
@@ -174,9 +172,7 @@ app.post('/add-friend', async (req, res) => {
         status: 'pending',
       });
 
-    if (requestError) {
-      return res.status(400).json({ error: requestError.message });
-    }
+    if (requestError) return res.status(400).json({ error: requestError.message });
 
     res.json({ message: 'Friend request sent successfully' });
 
@@ -185,7 +181,94 @@ app.post('/add-friend', async (req, res) => {
   }
 });
 
+// ------------------------
+// Get received requests
+app.get('/requests/:id', async (req, res) => { 
+  const { id } = req.params;
 
+  try {
+    const { data, error } = await supabase
+      .from('friend_requests')
+      .select('*')
+      .eq('receiver_id', id);
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ requests: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------
+// Get sent requests
+app.get('/sent-requests/:id', async (req, res) => { 
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('friend_requests')
+      .select('*')
+      .eq('sender_id', id);
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ sentRequests: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------
+// Accept friend request
+app.post('/requests/:id/accept', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1️⃣ Update request status
+    const { data: request, error } = await supabase
+      .from('friend_requests')
+      .update({ status: 'accepted' })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    // 2️⃣ Create friendship
+    await supabase.from('friendships').insert({
+      user1_id: request.sender_id,
+      user2_id: request.receiver_id
+    });
+
+    res.json({ message: 'Friend request accepted', request });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------
+// Reject friend request
+app.post('/requests/:id/reject', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from('friend_requests')
+      .update({ status: 'rejected' })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+
+    res.json({ message: 'Friend request rejected', request: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------
 // Start server
 app.listen(process.env.PORT || 3000, () =>
   console.log(`Server running on port ${process.env.PORT || 3000}`)
