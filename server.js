@@ -62,7 +62,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Get friends for a specific user
+
 app.get('/friends/:userId', async (req, res) => {
   const { userId } = req.params;
 
@@ -126,6 +126,60 @@ app.get('/shared-images/:friendshipId', async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
 
     res.json({ images: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// Add friend by code
+app.post('/add-friend', async (req, res) => {
+  const { senderId, friendCode } = req.body;
+
+  try {
+    // 1️⃣ Find user by code
+    const { data: receiver, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('friend_code', friendCode)
+      .single();
+
+    if (userError || !receiver) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent self request
+    if (receiver.id === senderId) {
+      return res.status(400).json({ error: 'You cannot add yourself' });
+    }
+
+    // 2️⃣ Check if already friends
+    const { data: existingFriendship } = await supabase
+      .from('friendships')
+      .select('id')
+      .or(
+        `and(user1_id.eq.${senderId},user2_id.eq.${receiver.id}),
+         and(user1_id.eq.${receiver.id},user2_id.eq.${senderId})`
+      )
+      .maybeSingle();
+
+    if (existingFriendship) {
+      return res.status(400).json({ error: 'Already friends' });
+    }
+
+    // 3️⃣ Create friend request
+    const { error: requestError } = await supabase
+      .from('friend_requests')
+      .insert({
+        sender_id: senderId,
+        receiver_id: receiver.id,
+        status: 'pending',
+      });
+
+    if (requestError) {
+      return res.status(400).json({ error: requestError.message });
+    }
+
+    res.json({ message: 'Friend request sent successfully' });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
