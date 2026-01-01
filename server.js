@@ -337,8 +337,10 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
 }); // <-- IMPORTANT: close the route properly
 
 // ------------------------
-// Log all registered routes
-console.log('Registered routes:');
-app._router.stack
-  .filter(r => r.route)
-  .map(r => console.log(r.route.path));
+if (app._router && app._router.stack) {
+  console.log('Registered routes:');
+  app._router.stack
+    .filter(r => r.route)
+    .map(r => console.log(r.route.path));
+}
+
