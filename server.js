@@ -339,3 +339,8 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+console.log('Registered routes:');
+app._router.stack
+  .filter(r => r.route)
+  .map(r => console.log(r.route.path));
+
