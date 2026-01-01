@@ -297,12 +297,10 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
     }
 
     const fileBuffer = fs.readFileSync(file.path);
-
     const fileName = `shared/${Date.now()}_${file.originalname}`;
 
-    
     const { error: uploadError } = await supabase.storage
-      .from('images') // YOUR BUCKET NAME
+      .from('images')
       .upload(fileName, fileBuffer, {
         contentType: file.mimetype,
       });
@@ -311,14 +309,12 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: uploadError.message });
     }
 
-    // 3️⃣ Get public URL
     const { data } = supabase.storage
       .from('images')
       .getPublicUrl(fileName);
 
     const imageUrl = data.publicUrl;
 
-   
     const { error: dbError } = await supabase
       .from('shared_images')
       .insert({
@@ -331,7 +327,6 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: dbError.message });
     }
 
-   
     fs.unlinkSync(file.path);
 
     res.json({ message: 'Image uploaded', imageUrl });
@@ -339,8 +334,11 @@ app.post('/upload-image', upload.single('image'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+}); // <-- IMPORTANT: close the route properly
+
+// ------------------------
+// Log all registered routes
 console.log('Registered routes:');
 app._router.stack
   .filter(r => r.route)
   .map(r => console.log(r.route.path));
-
