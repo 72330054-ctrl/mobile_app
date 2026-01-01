@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import fs from 'fs';
 import { createClient } from '@supabase/supabase-js';
-
+import crypto from 'crypto'; 
 dotenv.config();
 
 const app = express();
@@ -32,12 +32,14 @@ app.get('/', (req, res) => {
 });
 
 // ------------------------
-// Login / Signup
+
+
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
 
   try {
+    // Check if user already exists
     const { data: existingUser, error: selectError } = await supabase
       .from('users')
       .select('*')
@@ -51,19 +53,25 @@ app.post('/login', async (req, res) => {
       return res.json({ message: 'Login successful', user: existingUser });
     }
 
+    // Generate a unique friend code
+    const friendCode = crypto.randomBytes(3).toString('hex'); // 6 characters, e.g., "a1b2c3"
+
+    // Create new user
     const { data: newUser, error: insertError } = await supabase
       .from('users')
-      .insert([{ username, password }])
+      .insert([{ username, password, friend_code: friendCode }])
       .select()
       .single();
 
     if (insertError) return res.status(500).json({ error: insertError.message });
+
     res.json({ message: 'User created successfully', user: newUser });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ------------------------
 // Get friends
